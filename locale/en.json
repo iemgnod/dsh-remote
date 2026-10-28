@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Remote servers",
+    "description": "Save SSH targets, test connections, run commands and transfer files through remote_* tools"
+  }
+}

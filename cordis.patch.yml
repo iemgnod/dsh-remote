@@ -1,0 +1,8 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack.
+- insert:
+    - id: dsh-remote
+      name: 'dsh-remote'
+      config:
+        defaultTimeoutMs: 120000
+        connectionIdleMs: 60000
+        allowWebExec: true

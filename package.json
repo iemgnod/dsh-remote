@@ -1,0 +1,43 @@
+{
+  "name": "dsh-remote",
+  "version": "0.1.0",
+  "private": true,
+  "description": "远程服务器管理：保存 SSH 服务器配置、测试连接、执行命令与传输文件",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": {
+      "default": "./src/index.js"
+    },
+    "./client": "./client/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "client",
+    "locale",
+    "cordis.patch.yml",
+    "README.md",
+    "icon.svg"
+  ],
+  "dependencies": {
+    "ssh2": "^1.17.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "icon": "icon.svg",
+  "scripts": {
+    "test": "node test/run.mjs",
+    "pack": "npm pack --ignore-scripts"
+  }
+}
