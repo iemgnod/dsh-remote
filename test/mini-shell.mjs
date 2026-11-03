@@ -10,7 +10,7 @@ import path from 'node:path';
 /**
  * @param {string} script
  * @param {{ cwd: string, env: Record<string, string | undefined>, username: string, cancelled: () => boolean }} options
- * @returns {Promise<{ stdout: string, stderr: string, code: number }>}
+ * @returns {Promise<{ stdout: string, stderr: string, code: number, cwd: string }>}
  */
 export async function runScript(script, options) {
   let text = script.trim();
@@ -21,13 +21,16 @@ export async function runScript(script, options) {
       stdout: `DSH_REMOTE_OK\n${options.username}\nlinux-test x86_64\n${options.cwd}\n`,
       stderr: '',
       code: 0,
+      cwd: options.cwd,
     };
   }
   let stdout = '';
   let stderr = '';
   let code = 0;
   const cwdRef = { value: options.cwd };
-  options.env = { ...options.env, PWD: cwdRef.value };
+  // Mutated in place: an interactive shell keeps exports across commands.
+  const env = options.env;
+  env.PWD = cwdRef.value;
   for (const rawLine of text.split('\n')) {
     if (options.cancelled()) break;
     for (const rawCommand of splitTopLevel(rawLine, ';')) {
@@ -43,7 +46,7 @@ export async function runScript(script, options) {
       let failure = 0;
       if (head === 'exit') {
         code = Number(args[0] ?? 0) || 0;
-        return { stdout, stderr, code };
+        return { stdout, stderr, code, cwd: cwdRef.value };
       } else if (head === 'sleep') {
         const ms = Math.max(0, Number(args[0] ?? 0)) * 1000;
         const until = Date.now() + ms;
@@ -85,7 +88,7 @@ export async function runScript(script, options) {
       if (failure !== 0) code = failure;
     }
   }
-  return { stdout, stderr, code };
+  return { stdout, stderr, code, cwd: cwdRef.value };
 }
 
 /** Split on a delimiter outside quotes. */

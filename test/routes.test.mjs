@@ -140,6 +140,126 @@ test('honors the host request gate', async () => {
   }
 });
 
+/** A route fixture backed by a real in-process SSH server. */
+async function sshFixture({ allowWebExec } = {}) {
+  const root = fs.mkdtempSync(join(tmpdir(), 'dsh-remote-routes-term-'));
+  const server = await startSshServer({ rootDir: join(root, 'remote') });
+  const store = new ServerStore({ dir: join(root, 'store'), env: {} });
+  const entry = store.upsert({
+    name: 'test', host: server.host, port: server.port, username: server.username, password: server.password,
+  }).server;
+  const manager = new SshManager({ store });
+  let route;
+  const ctx = {
+    get: () => undefined,
+    effect: (fn) => fn(),
+    webServer: { register: (spec) => { route = spec; return () => {}; } },
+  };
+  registerRemoteRoutes(ctx, { store, manager, config: allowWebExec === undefined ? {} : { allowWebExec } });
+  return {
+    root,
+    server,
+    store,
+    manager,
+    entry,
+    route,
+    async close() {
+      manager.closeAll();
+      await server.close();
+      fs.rmSync(root, { recursive: true, force: true });
+    },
+  };
+}
+
+/** Poll `/terminal` like the panel does until the expected text shows up. */
+async function pollTerminal(route, serverId, expected, { timeoutMs = 4000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let since = 0;
+  let text = '';
+  const events = [];
+  while (Date.now() < deadline) {
+    const response = await call(route, 'GET', `/dsh-remote/terminal?server=${serverId}&since=${since}`);
+    const body = response.json();
+    assert.equal(response.status, 200);
+    since = body.cursor;
+    events.push(...body.events);
+    text += body.events.filter((event) => event.type === 'shell-data').map((event) => event.chunk).join('');
+    if (text.includes(expected)) return { text, events, cursor: since };
+    await new Promise((resolve) => setTimeout(resolve, 60));
+  }
+  throw new Error(`timed out waiting for ${JSON.stringify(expected)}; saw ${JSON.stringify(text)}`);
+}
+
+test('interactive terminal over HTTP: open, input, poll, interrupt, close', async () => {
+  const f = await sshFixture();
+  try {
+    const opened = await call(f.route, 'POST', '/dsh-remote/shells', { server: f.entry.id, cols: 120, rows: 40 });
+    assert.equal(opened.status, 200);
+    assert.equal(opened.json().shell.open, true);
+    assert.equal(opened.json().shell.id, f.entry.id);
+
+    const listed = await call(f.route, 'GET', '/dsh-remote/shells');
+    assert.deepEqual(listed.json().shells.map((shell) => shell.id), [f.entry.id]);
+
+    const typed = await call(f.route, 'POST', '/dsh-remote/shell/input', { server: f.entry.id, data: "printf 'term'\n" });
+    assert.equal(typed.status, 200);
+    assert.equal(typed.json().ok, true);
+
+    const seen = await pollTerminal(f.route, f.entry.id, 'term');
+    assert.ok(seen.events.some((event) => event.type === 'shell-open'), 'the open event is logged');
+    assert.ok(seen.events.every((event) => Number.isInteger(event.seq)), 'every event carries a cursor');
+
+    const signalled = await call(f.route, 'POST', '/dsh-remote/shell/signal', { server: f.entry.id });
+    assert.equal(signalled.status, 200);
+    assert.equal(signalled.json().signal, 'INT');
+
+    const resized = await call(f.route, 'POST', '/dsh-remote/shell/resize', { server: f.entry.id, cols: 90, rows: 24 });
+    assert.equal(resized.json().shell.cols, 90);
+
+    const cleared = await call(f.route, 'DELETE', `/dsh-remote/terminal?server=${f.entry.id}`);
+    assert.equal(cleared.json().ok, true);
+    const empty = await call(f.route, 'GET', `/dsh-remote/terminal?server=${f.entry.id}&since=0`);
+    assert.deepEqual(empty.json().events, []);
+
+    const closed = await call(f.route, 'DELETE', '/dsh-remote/shells', { server: f.entry.id });
+    assert.equal(closed.json().closed, true);
+    assert.deepEqual((await call(f.route, 'GET', '/dsh-remote/shells')).json().shells, []);
+  } finally {
+    await f.close();
+  }
+});
+
+test('the terminal routes honor allowWebExec and validate input', async () => {
+  const f = await sshFixture({ allowWebExec: false });
+  try {
+    const blocked = await call(f.route, 'POST', '/dsh-remote/shells', { server: f.entry.id });
+    assert.equal(blocked.status, 403);
+    assert.equal(blocked.json().code, 'web-exec-disabled');
+    const blockedInput = await call(f.route, 'POST', '/dsh-remote/shell/input', { server: f.entry.id, data: 'ls\n' });
+    assert.equal(blockedInput.status, 403);
+  } finally {
+    await f.close();
+  }
+
+  const g = await sshFixture();
+  try {
+    const missing = await call(g.route, 'POST', '/dsh-remote/shell/input', { server: g.entry.id });
+    assert.equal(missing.status, 400);
+    assert.equal(missing.json().code, 'invalid-field');
+    assert.equal(missing.json().field, 'data');
+
+    const notOpen = await call(g.route, 'POST', '/dsh-remote/shell/input', { server: g.entry.id, data: 'ls\n' });
+    assert.equal(notOpen.status, 400);
+    assert.equal(notOpen.json().code, 'shell-not-open');
+
+    const unknown = await call(g.route, 'GET', '/dsh-remote/terminal');
+    assert.equal(unknown.status, 400);
+    assert.equal(unknown.json().code, 'invalid-field');
+  } finally {
+    await g.close();
+  }
+});
+
 test('runs a command through the HTTP bridge', async () => {
   const root = fs.mkdtempSync(join(tmpdir(), 'dsh-remote-routes-exec-'));
   const server = await startSshServer({ rootDir: join(root, 'remote') });

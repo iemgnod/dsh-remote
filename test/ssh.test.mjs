@@ -180,6 +180,109 @@ test('jump host forwards the target connection', async () => {
   }
 });
 
+/** Poll until `predicate` holds: shell output arrives asynchronously. */
+async function waitFor(predicate, { timeoutMs = 4000, stepMs = 40 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = predicate();
+    if (value) return value;
+    await new Promise((resolve) => setTimeout(resolve, stepMs));
+  }
+  throw new Error('timed out waiting for shell output');
+}
+
+/** Concatenated stdout of every `shell-data` activity event. */
+function shellText(events) {
+  return events.filter((event) => event.type === 'shell-data').map((event) => event.chunk).join('');
+}
+
+test('interactive shell keeps cwd and exports across commands', async () => {
+  const f = await fixture();
+  const events = [];
+  const stop = f.manager.onActivity((_serverId, event) => events.push(event));
+  try {
+    fs.mkdirSync(join(f.remoteRoot, 'sub'));
+    const opened = await f.manager.openShell(f.entry, { cols: 120, rows: 40 });
+    assert.equal(opened.open, true);
+    assert.equal(opened.cols, 120);
+    assert.equal(opened.rows, 40);
+    assert.deepEqual(f.manager.listShells().map((shell) => shell.id), [f.entry.id]);
+    assert.equal(events[0].type, 'shell-open');
+
+    // Re-opening the same server reuses the session instead of spawning a second one.
+    const again = await f.manager.openShell(f.entry, { cols: 100, rows: 30 });
+    assert.equal(again.cols, 100);
+    assert.equal(f.manager.listShells().length, 1);
+
+    await f.manager.writeShell(f.entry, 'cd sub\n');
+    await f.manager.writeShell(f.entry, 'pwd\n');
+    await waitFor(() => shellText(events).includes('sub'));
+
+    await f.manager.writeShell(f.entry, 'export FOO=bar\n');
+    await f.manager.writeShell(f.entry, 'echo $FOO\n');
+    await waitFor(() => shellText(events).includes('bar'));
+    // cd survived, so the prompt still resolves relative to `sub`.
+    assert.ok(shellText(events).split('sub').length >= 2, shellText(events));
+  } finally {
+    stop();
+    await f.close();
+  }
+});
+
+test('interrupt stops a foreground command and leaves the shell usable', async () => {
+  const f = await fixture();
+  const events = [];
+  const stop = f.manager.onActivity((_serverId, event) => events.push(event));
+  try {
+    await f.manager.openShell(f.entry);
+    await f.manager.writeShell(f.entry, 'sleep 5\n');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const interruptedAt = Date.now();
+    await f.manager.signalShell(f.entry, 'INT');
+    await f.manager.writeShell(f.entry, 'pwd\n');
+    await waitFor(() => shellText(events).length > 0, { timeoutMs: 2500 });
+    assert.ok(Date.now() - interruptedAt < 2500, 'the queued command ran after the interrupt');
+  } finally {
+    stop();
+    await f.close();
+  }
+});
+
+test('closing a shell drops it and further writes fail', async () => {
+  const f = await fixture();
+  try {
+    await f.manager.openShell(f.entry);
+    const closed = await f.manager.closeShell(f.entry);
+    assert.equal(closed.closed, true);
+    assert.deepEqual(f.manager.listShells(), []);
+    await assert.rejects(
+      f.manager.writeShell(f.entry, 'pwd\n'),
+      (error) => error.code === 'shell-not-open',
+    );
+    await assert.rejects(
+      f.manager.signalShell(f.entry, 'INT'),
+      (error) => error.code === 'shell-not-open',
+    );
+    // Closing an unknown shell is a no-op rather than an error.
+    assert.equal((await f.manager.closeShell(f.entry)).closed, false);
+  } finally {
+    await f.close();
+  }
+});
+
+test('a disabled server cannot open a terminal', async () => {
+  const f = await fixture();
+  try {
+    const disabled = { ...f.entry, disabled: true };
+    await assert.rejects(
+      f.manager.openShell(disabled),
+      (error) => /已停用/.test(error.message),
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('wrong password and disabled servers fail with actionable messages', async () => {
   const f = await fixture();
   try {

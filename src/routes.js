@@ -8,10 +8,12 @@
  */
 
 import { RemoteError, errorText } from './util.js';
+import { TerminalLog } from './terminal.js';
 
 const PREFIX = '/dsh-remote';
 const MAX_BODY_BYTES = 128 * 1024;
 const MAX_COMMAND_LENGTH = 8192;
+const MAX_INPUT_LENGTH = 64 * 1024;
 
 /**
  * @param {import('node:http').IncomingMessage} request
@@ -90,6 +92,15 @@ function sameOrigin(request, trustedHosts) {
  */
 export function registerRemoteRoutes(ctx, deps) {
   const { store, manager, config } = deps;
+  const terminalLog = new TerminalLog();
+  // Every shell byte and every agent command lands in the log the panel polls.
+  const unsubscribe = manager.onActivity((serverId, event) => {
+    terminalLog.record(serverId, event);
+  });
+  ctx.effect(() => () => {
+    unsubscribe();
+    terminalLog.reset();
+  }, 'dsh-remote: terminal log');
   const connection = () => {
     try {
       return ctx.get('connection');
@@ -197,6 +208,110 @@ export function registerRemoteRoutes(ctx, deps) {
         const workdir = typeof body.workdir === 'string' ? body.workdir : undefined;
         const result = await manager.exec(server, { command, workdir, timeoutMs });
         sendJson(response, 200, { ok: true, exec: result });
+        return;
+      }
+
+      // ---- interactive terminal -------------------------------------------------
+      if (route === '/shells' && method === 'GET') {
+        sendJson(response, 200, { ok: true, shells: manager.listShells() });
+        return;
+      }
+
+      if (route === '/shells' && method === 'POST') {
+        if (config.allowWebExec === false) {
+          sendJson(response, 403, { ok: false, error: '网页端命令执行已关闭', code: 'web-exec-disabled' });
+          return;
+        }
+        const body = await readJson(request);
+        const selector = typeof body.server === 'string' ? body.server : '';
+        if (selector === '') throw new RemoteError('缺少 server', { code: 'invalid-field', field: 'server' });
+        const { server } = store.find(selector);
+        const shell = await manager.openShell(server, {
+          cols: typeof body.cols === 'number' ? body.cols : undefined,
+          rows: typeof body.rows === 'number' ? body.rows : undefined,
+        });
+        sendJson(response, 200, { ok: true, shell });
+        return;
+      }
+
+      if (route === '/shells' && method === 'DELETE') {
+        const body = await readJson(request);
+        const selector = typeof body.server === 'string' ? body.server : '';
+        if (selector === '') throw new RemoteError('缺少 server', { code: 'invalid-field', field: 'server' });
+        const { server } = store.find(selector);
+        const result = await manager.closeShell(server);
+        terminalLog.clear(server.id);
+        sendJson(response, 200, { ok: true, closed: result.closed });
+        return;
+      }
+
+      if (route === '/shell/input' && method === 'POST') {
+        if (config.allowWebExec === false) {
+          sendJson(response, 403, { ok: false, error: '网页端命令执行已关闭', code: 'web-exec-disabled' });
+          return;
+        }
+        const body = await readJson(request);
+        const selector = typeof body.server === 'string' ? body.server : '';
+        const data = typeof body.data === 'string' ? body.data : '';
+        if (selector === '') throw new RemoteError('缺少 server', { code: 'invalid-field', field: 'server' });
+        if (data === '') throw new RemoteError('缺少 data', { code: 'invalid-field', field: 'data' });
+        if (data.length > MAX_INPUT_LENGTH) {
+          throw new RemoteError(`输入过长（最多 ${MAX_INPUT_LENGTH} 字符）`, { code: 'invalid-field', field: 'data' });
+        }
+        const { server } = store.find(selector);
+        const result = await manager.writeShell(server, data);
+        sendJson(response, 200, { ok: true, ...result });
+        return;
+      }
+
+      if (route === '/shell/signal' && method === 'POST') {
+        if (config.allowWebExec === false) {
+          sendJson(response, 403, { ok: false, error: '网页端命令执行已关闭', code: 'web-exec-disabled' });
+          return;
+        }
+        const body = await readJson(request);
+        const selector = typeof body.server === 'string' ? body.server : '';
+        if (selector === '') throw new RemoteError('缺少 server', { code: 'invalid-field', field: 'server' });
+        const signalName = typeof body.signal === 'string' && body.signal !== '' ? body.signal.toUpperCase() : 'INT';
+        const { server } = store.find(selector);
+        const result = await manager.signalShell(server, signalName);
+        sendJson(response, 200, { ok: true, ...result });
+        return;
+      }
+
+      if (route === '/shell/resize' && method === 'POST') {
+        const body = await readJson(request);
+        const selector = typeof body.server === 'string' ? body.server : '';
+        if (selector === '') throw new RemoteError('缺少 server', { code: 'invalid-field', field: 'server' });
+        const { server } = store.find(selector);
+        const shell = await manager.resizeShell(server, {
+          cols: typeof body.cols === 'number' ? body.cols : undefined,
+          rows: typeof body.rows === 'number' ? body.rows : undefined,
+        });
+        sendJson(response, 200, { ok: true, shell });
+        return;
+      }
+
+      if (route === '/terminal' && method === 'GET') {
+        const selector = url.searchParams.get('server') ?? '';
+        if (selector === '') throw new RemoteError('缺少 server', { code: 'invalid-field', field: 'server' });
+        const { server } = store.find(selector);
+        const since = Number(url.searchParams.get('since') ?? 0);
+        sendJson(response, 200, {
+          ok: true,
+          server: server.id,
+          cursor: terminalLog.seq,
+          events: terminalLog.read(server.id, Number.isFinite(since) ? since : 0),
+        });
+        return;
+      }
+
+      if (route === '/terminal' && method === 'DELETE') {
+        const selector = url.searchParams.get('server') ?? '';
+        if (selector === '') throw new RemoteError('缺少 server', { code: 'invalid-field', field: 'server' });
+        const { server } = store.find(selector);
+        terminalLog.clear(server.id);
+        sendJson(response, 200, { ok: true });
         return;
       }
 

@@ -2,6 +2,7 @@
 await import('./store.test.mjs');
 await import('./command.test.mjs');
 await import('./ssh.test.mjs');
+await import('./terminal.test.mjs');
 await import('./routes.test.mjs');
 await import('./tools.test.mjs');
 await import('./apply.test.mjs');

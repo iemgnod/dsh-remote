@@ -76,11 +76,29 @@ window.__ModuleLoader__.load({
       maxOutputBytes: '单流输出上限 (字节)',
       enabled: '已启用',
       stopped: '已停用',
-      commandTitle: '快速执行命令',
-      commandHint: '以 SSH 登录用户身份非交互执行；输出上限由服务器配置决定。',
-      commandPlaceholder: '例如：uptime && df -h',
-      run: '执行',
-      running: '执行中…',
+      terminalTitle: '远程终端',
+      terminalHint: '显示 AI 在远端执行的命令与输出；连接后可直接输入命令，cd 与变量会保留。',
+      terminalOpen: '连接终端',
+      terminalClose: '断开连接',
+      terminalConnecting: '正在连接…',
+      terminalIdle: '尚未连接。点「连接终端」建立一条持久 shell 会话。',
+      terminalConnected: '已连接',
+      terminalDisconnected: '未连接',
+      terminalCollapse: '收起',
+      terminalHistory: 'AI 运行历史',
+      terminalPlaceholder: '输入命令，Enter 发送',
+      terminalSend: '发送',
+      terminalInterrupt: '中断 (Ctrl+C)',
+      terminalClear: '清空显示',
+      terminalNoServer: '没有可用服务器（先在列表中启用一台）。',
+      terminalEmpty: '暂无输出。AI 执行的命令会实时出现在这里。',
+      terminalOpened: '终端会话已打开',
+      terminalClosed: '终端会话已关闭',
+      terminalAgent: 'AI',
+      terminalFilterAll: '全部',
+      terminalFilterAi: 'AI 运行历史',
+      terminalFilterShell: '我的输入',
+      terminalWait: '等待中…',
       clear: '清空输出',
       noEnabled: '没有可用服务器（先在列表中启用一台）。',
       confirmRemove: '确定删除服务器「{name}」？只删除本地配置，不会改动远端。',
@@ -160,11 +178,29 @@ window.__ModuleLoader__.load({
       maxOutputBytes: 'Per-stream output cap (bytes)',
       enabled: 'Enabled',
       stopped: 'Disabled',
-      commandTitle: 'Quick command',
-      commandHint: 'Runs non-interactively as the SSH user; output is capped by the server settings.',
-      commandPlaceholder: 'e.g. uptime && df -h',
-      run: 'Run',
-      running: 'Running…',
+      terminalTitle: 'Remote terminal',
+      terminalHint: 'Commands the AI runs remotely and their output show up here; connect to type your own commands. cd and variables persist.',
+      terminalOpen: 'Connect',
+      terminalClose: 'Disconnect',
+      terminalConnecting: 'Connecting…',
+      terminalIdle: 'Not connected. Use "Connect" to start a persistent shell session.',
+      terminalConnected: 'Connected',
+      terminalDisconnected: 'Disconnected',
+      terminalCollapse: 'Collapse',
+      terminalHistory: 'AI history',
+      terminalPlaceholder: 'Type a command, Enter sends it',
+      terminalSend: 'Send',
+      terminalInterrupt: 'Interrupt (Ctrl+C)',
+      terminalClear: 'Clear',
+      terminalNoServer: 'No enabled server. Enable one in the list first.',
+      terminalEmpty: 'No output yet. Commands the AI runs appear here live.',
+      terminalOpened: 'Shell session opened',
+      terminalClosed: 'Shell session closed',
+      terminalAgent: 'AI',
+      terminalFilterAll: 'All',
+      terminalFilterAi: 'AI history',
+      terminalFilterShell: 'My input',
+      terminalWait: 'Running…',
       clear: 'Clear output',
       noEnabled: 'No enabled server. Enable one in the list first.',
       confirmRemove: 'Delete server "{name}"? Only the local config is removed.',
@@ -229,7 +265,7 @@ window.__ModuleLoader__.load({
 .dsh-remote__path{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;font-size:11px;color:var(--r-muted);word-break:break-all;flex:1;min-width:180px}
 .dsh-remote__json{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;font-size:11px;line-height:1.55;white-space:pre-wrap;word-break:break-word;max-height:320px;overflow:auto;margin:8px 0 0;padding:12px 14px;border-radius:10px;background:var(--r-hover);border:1px solid var(--r-border);color:var(--r-secondary)}
 .dsh-remote__list{display:flex;flex-direction:column;gap:10px}
-.dsh-remote__card{border:1px solid var(--r-border);border-radius:12px;padding:14px 16px;background:var(--r-bg);transition:border-color .15s,box-shadow .15s}
+.dsh-remote__card{border:1px solid var(--r-border);border-radius:12px;padding:14px 16px;background:transparent;transition:border-color .15s,box-shadow .15s}
 .dsh-remote__card:hover{border-color:var(--r-border-strong);box-shadow:0 3px 14px rgba(20,25,40,.05)}
 .dsh-remote__cardhead{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.dsh-remote__cardhead>.dsh-remote__actions{flex:none}
 .dsh-remote__identity{display:flex;align-items:flex-start;gap:10px;min-width:0;flex:1}
@@ -269,12 +305,34 @@ window.__ModuleLoader__.load({
 .dsh-remote__empty{text-align:center;padding:44px 24px;border:1px dashed var(--r-border);border-radius:12px;color:var(--r-secondary);background:var(--r-bg)}
 .dsh-remote__empty .dsh-remote__icon{color:var(--r-muted);margin-bottom:8px}
 .dsh-remote__empty strong{display:block;color:var(--r-text);font-size:14px;margin-bottom:3px}
-.dsh-remote__terminal{margin-top:10px;border:1px solid #2a2f3a;border-radius:10px;background:#161a22;color:#d7dce5;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;font-size:12px;line-height:1.6;padding:12px 14px;max-height:380px;overflow:auto;white-space:pre-wrap;word-break:break-word}
-.dsh-remote__terminal .cmd{color:#8f9bb3}
-.dsh-remote__terminal .err{color:#ff9b9b}
-.dsh-remote__terminal .meta{color:#7f8a9d;margin-top:6px}
-.dsh-remote__runbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
-.dsh-remote__runbar select{flex:1;min-width:180px}
+.dsh-remote__term{margin-top:12px;border:1px solid var(--r-border);border-radius:12px;background:var(--r-hover);padding:10px 12px 12px;display:flex;flex-direction:column;gap:8px}
+.dsh-remote__termhead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.dsh-remote__termtext{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.dsh-remote__termtitle{font-size:13px;font-weight:600;display:inline-flex;align-items:center}
+.dsh-remote__termhint{font-size:11.5px;color:var(--r-muted);flex:1 1 260px;min-width:0}
+.dsh-remote__termactions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.dsh-remote__termdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--r-muted);margin-right:7px;vertical-align:middle;transition:background .2s}
+.dsh-remote__termdot.on{background:var(--r-success);box-shadow:0 0 0 3px rgba(18,128,92,.15)}
+.dsh-remote__termdot.busy{background:var(--r-accent);animation:dsh-remote-pulse 1.1s ease-in-out infinite}
+@keyframes dsh-remote-pulse{0%,100%{opacity:.3}50%{opacity:1}}
+.dsh-remote__termfilters{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:8px;background:var(--r-bg);border:1px solid var(--r-border);align-self:flex-start}
+.dsh-remote__termfilter{font-size:11.5px;padding:2px 9px;line-height:18px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--r-secondary)}
+.dsh-remote__termfilter:hover:not(:disabled){background:var(--r-hover);color:var(--r-text)}
+.dsh-remote__termfilter.active{background:var(--r-accent);border-color:transparent;color:#fff}
+.dsh-remote__terminal{margin:0;border:1px solid #262c38;border-radius:10px;background:#141821;color:#d6dbe5;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;font-size:12px;line-height:1.65;padding:10px 12px;height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word;box-shadow:inset 0 1px 3px rgba(0,0,0,.35);scrollbar-width:thin}
+.dsh-remote__terminal::-webkit-scrollbar{width:9px;height:9px}
+.dsh-remote__terminal::-webkit-scrollbar-thumb{background:#39404f;border-radius:6px}
+.dsh-remote__terminal::-webkit-scrollbar-track{background:transparent}
+.dsh-remote__termline{margin:0}
+.dsh-remote__termline.cmd{color:#9fd0ff}
+.dsh-remote__termtag{display:inline-block;margin-right:6px;padding:0 5px;border-radius:4px;background:rgba(79,140,255,.18);color:#8fbaff;font-size:10.5px;line-height:16px;vertical-align:baseline}
+.dsh-remote__termline.err{color:#ff9b9b}
+.dsh-remote__termline.meta{color:#7c8698;font-style:italic}
+.dsh-remote__runbar{display:flex;align-items:center;gap:6px;margin:0}
+.dsh-remote .dsh-remote__runbar input[type=text]{flex:1;min-width:0;background:#141821;border-color:#262c38;color:#d6dbe5;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;font-size:12px;padding:6px 10px}
+.dsh-remote .dsh-remote__runbar input[type=text]::placeholder{color:#6b7587}
+.dsh-remote .dsh-remote__runbar input[type=text]:focus{border-color:var(--r-accent);box-shadow:0 0 0 3px rgba(77,107,254,.18)}
+.dsh-remote__runbar button{flex:none}
 .dsh-remote__footer{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
 @media (max-width:640px){
   .dsh-remote__page{padding:20px 18px 40px}
@@ -450,14 +508,19 @@ window.__ModuleLoader__.load({
       const [saveError, setSaveError] = useState('');
       const [saving, setSaving] = useState(false);
       const [tests, setTests] = useState({});
-      const [runServer, setRunServer] = useState('');
-      const [command, setCommand] = useState('');
-      const [running, setRunning] = useState(false);
-      const [runError, setRunError] = useState('');
-      const [runResult, setRunResult] = useState(null);
+      const [terminalId, setTerminalId] = useState('');
+      const [terminalLive, setTerminalLive] = useState(false);
+      const [terminalBusy, setTerminalBusy] = useState(false);
+      const [terminalError, setTerminalError] = useState('');
+      const [terminalEvents, setTerminalEvents] = useState([]);
+      const [terminalInput, setTerminalInput] = useState('');
+      const [terminalFilter, setTerminalFilter] = useState('all');
       const [showJson, setShowJson] = useState(false);
       const [copied, setCopied] = useState(false);
       const mounted = useRef(true);
+      // The poll cursor lives in a ref: it advances every tick without
+      // re-running the effect, and opening a card resets it to replay history.
+      const cursorRef = useRef(0);
       useEffect(() => () => { mounted.current = false; }, []);
 
       const load = useCallback(async () => {
@@ -488,12 +551,128 @@ window.__ModuleLoader__.load({
           // Clipboard may be unavailable; the path is still selectable.
         }
       };
+      // Each server card owns its own terminal: opening one replays that
+      // server's AI history from the start of the host log, and the shell is
+      // opened lazily by the connect button.
       useEffect(() => {
-        if (runServer === '' && enabledServers.length > 0) setRunServer(enabledServers[0].id);
-        if (runServer !== '' && !enabledServers.some((server) => server.id === runServer)) {
-          setRunServer(enabledServers[0]?.id ?? '');
+        if (terminalId !== '' && !servers.some((server) => server.id === terminalId)) {
+          setTerminalId('');
+          setTerminalLive(false);
+          setTerminalEvents([]);
         }
-      }, [enabledServers, runServer]);
+      }, [servers, terminalId]);
+
+      // The host keeps a per-server event log; we poll it for the delta so the
+      // card shows the AI's commands as they stream, without SSE plumbing.
+      // Polling does not wait for the shell: `remote_exec` activity is logged
+      // too, so history shows up even when the terminal is never connected.
+      useEffect(() => {
+        if (terminalId === '') return undefined;
+        let alive = true;
+        const tick = async () => {
+          if (!alive) return;
+          try {
+            const data = await request(`/terminal?server=${encodeURIComponent(terminalId)}&since=${cursorRef.current}`);
+            if (!alive) return;
+            if (Array.isArray(data.events) && data.events.length > 0) {
+              setTerminalEvents((prev) => {
+                const next = prev.concat(data.events);
+                return next.length > 800 ? next.slice(next.length - 800) : next;
+              });
+            }
+            if (typeof data.cursor === 'number') cursorRef.current = data.cursor;
+          } catch (error) {
+            if (alive) setTerminalError(String(error.message ?? error));
+          }
+        };
+        void tick();
+        const timer = setInterval(() => { void tick(); }, 700);
+        return () => { alive = false; clearInterval(timer); };
+      }, [terminalId]);
+
+      // Opening a card starts a fresh view: reset the cursor so the whole
+      // retained history is replayed, then let the poll effect take over.
+      const expandTerminal = (serverId) => {
+        if (terminalId === serverId) {
+          setTerminalId('');
+          return;
+        }
+        setTerminalError('');
+        setTerminalInput('');
+        setTerminalFilter('all');
+        setTerminalEvents([]);
+        cursorRef.current = 0;
+        setTerminalId(serverId);
+      };
+
+      const openTerminal = async () => {
+        if (!terminalId) return;
+        setTerminalBusy(true);
+        setTerminalError('');
+        try {
+          const data = await request('/shells', {
+            method: 'POST',
+            body: JSON.stringify({ server: terminalId, cols: 120, rows: 40 }),
+          });
+          if (!mounted.current) return;
+          setTerminalLive(true);
+          if (data.shell?.open !== true) setTerminalError(t('terminalClosed'));
+        } catch (error) {
+          if (mounted.current) setTerminalError(String(error.message ?? error));
+        } finally {
+          if (mounted.current) setTerminalBusy(false);
+        }
+      };
+
+      const closeTerminal = async () => {
+        if (!terminalId) return;
+        setTerminalBusy(true);
+        try {
+          await request('/shells', { method: 'DELETE', body: JSON.stringify({ server: terminalId }) });
+          if (mounted.current) setTerminalLive(false);
+        } catch (error) {
+          if (mounted.current) setTerminalError(String(error.message ?? error));
+        } finally {
+          if (mounted.current) setTerminalBusy(false);
+        }
+      };
+
+      const sendInput = async () => {
+        if (!terminalId || terminalInput.trim() === '') return;
+        const text = terminalInput;
+        setTerminalInput('');
+        try {
+          await request('/shell/input', {
+            method: 'POST',
+            body: JSON.stringify({ server: terminalId, data: `${text}\n` }),
+          });
+        } catch (error) {
+          if (mounted.current) setTerminalError(String(error.message ?? error));
+        }
+      };
+
+      const interrupt = async () => {
+        if (!terminalId) return;
+        try {
+          await request('/shell/signal', {
+            method: 'POST',
+            body: JSON.stringify({ server: terminalId, signal: 'INT' }),
+          });
+        } catch (error) {
+          if (mounted.current) setTerminalError(String(error.message ?? error));
+        }
+      };
+
+      const clearTerminal = async () => {
+        setTerminalEvents([]);
+        if (!terminalId) return;
+        try {
+          await request(`/terminal?server=${encodeURIComponent(terminalId)}`, { method: 'DELETE' });
+          cursorRef.current = 0;
+        } catch (error) {
+          if (mounted.current) setTerminalError(String(error.message ?? error));
+        }
+      };
 
       const startEdit = (server) => {
         setSaveError('');
@@ -559,24 +738,6 @@ window.__ModuleLoader__.load({
         } catch (error) {
           if (!mounted.current) return;
           setTests((prev) => ({ ...prev, [server.id]: { busy: false, ok: false, message: String(error.message ?? error) } }));
-        }
-      };
-
-      const run = async () => {
-        if (!runServer || command.trim() === '') return;
-        setRunning(true);
-        setRunError('');
-        setRunResult(null);
-        try {
-          const data = await request('/exec', {
-            method: 'POST',
-            body: JSON.stringify({ server: runServer, command }),
-          });
-          if (mounted.current) setRunResult(data.exec);
-        } catch (error) {
-          if (mounted.current) setRunError(String(error.message ?? error));
-        } finally {
-          if (mounted.current) setRunning(false);
         }
       };
 
@@ -713,8 +874,75 @@ window.__ModuleLoader__.load({
         h('span', { key: 'l', className: 'dsh-remote__fieldlabel' }, label),
         h('span', { key: 'v', className: 'dsh-remote__fieldvalue' }, value),
       ]);
+      // Render one terminal event. Agent output is tagged so an onlooker can
+      // tell what the AI ran from what they typed themselves.
+      const termLine = (event, index) => {
+        const key = `ev-${event.seq ?? index}`;
+        if (event.type === 'agent-start') {
+          return h('div', { key, className: 'dsh-remote__termline cmd' }, [
+            h('span', { key: 'p', className: 'dsh-remote__termtag' }, t('terminalAgent')),
+            h('span', { key: 'c' }, `$ ${event.command ?? ''}`),
+          ]);
+        }
+        if (event.type === 'agent-end') {
+          const parts = [`${t('exitCode')}: ${event.exitCode ?? '?'}`];
+          if (event.timedOut) parts.push(t('timedOut'));
+          if (event.cancelled) parts.push('cancelled');
+          if (typeof event.durationMs === 'number') parts.push(`${event.durationMs}ms`);
+          if (event.error) parts.push(event.error);
+          return h('div', { key, className: 'dsh-remote__termline meta' }, `[${t('terminalAgent')}] ${parts.join(' · ')}`);
+        }
+        if (event.type === 'shell-open') {
+          return h('div', { key, className: 'dsh-remote__termline meta' }, `— ${t('terminalOpened')} ${event.cols ?? ''}x${event.rows ?? ''} —`);
+        }
+        if (event.type === 'shell-close') {
+          return h('div', { key, className: 'dsh-remote__termline meta' }, `— ${t('terminalClosed')}${event.error ? `: ${event.error}` : ''} —`);
+        }
+        const text = typeof event.chunk === 'string' ? event.chunk : '';
+        if (text === '') return null;
+        return h('div', {
+          key,
+          className: `dsh-remote__termline${event.stream === 'stderr' ? ' err' : ''}`,
+        }, text);
+      };
+
+      const wantsEvent = (event) => {
+        if (terminalFilter === 'ai') {
+          return event.type === 'agent-start' || event.type === 'agent-data' || event.type === 'agent-end';
+        }
+        if (terminalFilter === 'shell') {
+          return event.type === 'shell-data' || event.type === 'shell-open' || event.type === 'shell-close';
+        }
+        return true;
+      };
+
+      // The screen is rebuilt per render; only the expanded card mounts it.
+      // Scrolling sticks to the bottom while the user is already there, so
+      // reading back through history is not yanked down by the next poll.
+      const stickToBottom = (node) => {
+        if (!node) return;
+        if (node.dataset.stick !== '0') node.scrollTop = node.scrollHeight;
+        node.onscroll = () => {
+          const atBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 24;
+          node.dataset.stick = atBottom ? '1' : '0';
+        };
+      };
+
+      const termView = () => h('div', {
+        key: 'screen',
+        className: 'dsh-remote__terminal',
+        ref: stickToBottom,
+      }, (() => {
+        const visible = terminalEvents.filter(wantsEvent);
+        if (visible.length === 0) {
+          return h('div', { key: 'empty', className: 'dsh-remote__termline meta' }, terminalLive ? t('terminalEmpty') : t('terminalIdle'));
+        }
+        return visible.map(termLine).filter(Boolean);
+      })());
+
       const cards = servers.map((server) => {
         const testState = tests[server.id];
+        const open = terminalId === server.id;
         const authText = server.authType === 'key' ? t('authKey')
           : server.authType === 'agent' ? t('authAgent') : t('authPassword');
         const jumpText = server.jump
@@ -755,6 +983,16 @@ window.__ModuleLoader__.load({
               }, [
                 h(Icon, { key: 'i', name: 'play', size: 13 }),
                 h('span', { key: 'l' }, testState?.busy ? t('testing') : t('test')),
+              ]),
+              h('button', {
+                key: 'term',
+                className: open ? 'small primary' : 'small',
+                title: t('terminalTitle'),
+                disabled: server.disabled && !open,
+                onClick: () => expandTerminal(server.id),
+              }, [
+                h(Icon, { key: 'i', name: 'terminal', size: 13 }),
+                h('span', { key: 'l' }, open ? t('terminalCollapse') : t('terminalTitle')),
               ]),
               h('button', {
                 key: 'edit',
@@ -804,21 +1042,97 @@ window.__ModuleLoader__.load({
               kv(t('updatedAt'), server.updatedAt ? new Date(server.updatedAt).toLocaleString() : '—', 'updated'),
             ]),
           ]),
+          // The terminal lives inside the card: it replays that server's AI
+          // history whether or not a shell is connected, and connecting adds
+          // an input row on top of the same stream.
+          open
+            ? h('div', { key: 'term', className: 'dsh-remote__term' }, [
+              h('div', { key: 'head', className: 'dsh-remote__termhead' }, [
+                h('div', { key: 'text', className: 'dsh-remote__termtext' }, [
+                  h('strong', { key: 't', className: 'dsh-remote__termtitle' }, [
+                    h('span', { key: 'dot', className: `dsh-remote__termdot${terminalBusy ? ' busy' : terminalLive ? ' on' : ''}` }),
+                    t('terminalTitle'),
+                  ]),
+                  h('span', {
+                    key: 'st',
+                    className: `dsh-remote__chip ${terminalLive ? 'ok' : 'off'}`,
+                  }, terminalLive ? t('terminalConnected') : t('terminalDisconnected')),
+                  h('span', { key: 'h', className: 'dsh-remote__termhint' }, t('terminalHint')),
+                ]),
+                h('div', { key: 'actions', className: 'dsh-remote__termactions' }, [
+                  terminalLive
+                    ? h('button', {
+                      key: 'close',
+                      className: 'small ghost',
+                      disabled: terminalBusy,
+                      onClick: () => void closeTerminal(),
+                    }, t('terminalClose'))
+                    : h('button', {
+                      key: 'open',
+                      className: 'small primary',
+                      disabled: terminalBusy || server.disabled,
+                      onClick: () => void openTerminal(),
+                    }, [
+                      h(Icon, { key: 'i', name: 'terminal', size: 13 }),
+                      h('span', { key: 'l' }, terminalBusy ? t('terminalConnecting') : t('terminalOpen')),
+                    ]),
+                  h('button', {
+                    key: 'int',
+                    className: 'small ghost',
+                    disabled: !terminalLive,
+                    title: t('terminalInterrupt'),
+                    onClick: () => void interrupt(),
+                  }, t('terminalInterrupt')),
+                  h('button', {
+                    key: 'clear',
+                    className: 'small ghost',
+                    onClick: () => void clearTerminal(),
+                  }, t('terminalClear')),
+                ]),
+              ]),
+              h('div', { key: 'filters', className: 'dsh-remote__termfilters' }, [
+                ['all', t('terminalFilterAll')],
+                ['ai', t('terminalFilterAi')],
+                ['shell', t('terminalFilterShell')],
+              ].map(([value, label]) => h('button', {
+                key: value,
+                className: `dsh-remote__termfilter${terminalFilter === value ? ' active' : ''}`,
+                onClick: () => setTerminalFilter(value),
+              }, label))),
+              termView(),
+              h('div', { key: 'input', className: 'dsh-remote__runbar' }, [
+                h('input', {
+                  key: 'cmd',
+                  type: 'text',
+                  value: terminalInput,
+                  placeholder: terminalLive ? t('terminalPlaceholder') : t('terminalIdle'),
+                  disabled: !terminalLive,
+                  onChange: (event) => setTerminalInput(event.target.value),
+                  onKeyDown: (event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void sendInput();
+                    }
+                  },
+                }),
+                h('button', {
+                  key: 'send',
+                  className: 'primary',
+                  disabled: !terminalLive || terminalInput.trim() === '',
+                  onClick: () => void sendInput(),
+                }, [
+                  h(Icon, { key: 'i', name: 'play', size: 13 }),
+                  h('span', { key: 'l' }, t('terminalSend')),
+                ]),
+              ]),
+              terminalError
+                ? h('div', { key: 'err', className: 'dsh-remote__banner error' }, terminalError)
+                : null,
+            ])
+            : null,
         ]);
       });
 
-      const output = runResult
-        ? h('div', { className: 'dsh-remote__terminal' }, [
-          h('div', { key: 'cmd', className: 'cmd' }, `$ ${runResult.command}`),
-          runResult.stdout?.text ? h('div', { key: 'out' }, runResult.stdout.text) : null,
-          runResult.stderr?.text ? h('div', { key: 'err', className: 'err' }, `[stderr]\n${runResult.stderr.text}`) : null,
-          h('div', { key: 'meta', className: 'meta' }, [
-            `${t('exitCode')}: ${runResult.exitCode}`,
-            runResult.timedOut ? ` · ${t('timedOut')}` : '',
-            ` · ${runResult.durationMs}ms`,
-          ].join('')),
-        ])
-        : null;
 
       return h('div', { className: 'dsh-remote' }, [
         h('div', { key: 'head', className: 'dsh-remote__head' }, [
@@ -885,48 +1199,6 @@ window.__ModuleLoader__.load({
               ]),
             ])
             : h('div', { key: 'cards', className: 'dsh-remote__list' }, cards)),
-        h('div', { key: 'cmdpanel', className: 'dsh-remote__panel' }, [
-          h('div', { key: 'head', className: 'dsh-remote__panelhead' }, [
-            h('div', { key: 'text' }, [
-              h('strong', { key: 't' }, t('commandTitle')),
-              h('div', { key: 'h', className: 'dsh-remote__note' }, t('commandHint')),
-            ]),
-          ]),
-          h('div', { key: 'ta', className: 'dsh-remote__field', style: { marginTop: '10px' } },
-            h('textarea', {
-              value: command,
-              placeholder: t('commandPlaceholder'),
-              onChange: (event) => setCommand(event.target.value),
-              onKeyDown: (event) => {
-                if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void run();
-              },
-            })),
-          h('div', { key: 'runbar', className: 'dsh-remote__runbar' }, [
-            h('select', {
-              key: 'server',
-              value: runServer,
-              onChange: (event) => setRunServer(event.target.value),
-            }, enabledServers.length === 0
-              ? [h('option', { key: 'none', value: '' }, t('noEnabled'))]
-              : enabledServers.map((server) => h('option', { key: server.id, value: server.id }, `${server.name} (${server.id})`))),
-            h('button', {
-              key: 'run',
-              className: 'primary',
-              disabled: running || !runServer || command.trim() === '',
-              onClick: () => void run(),
-            }, [
-              h(Icon, { key: 'i', name: 'play', size: 14 }),
-              h('span', { key: 'l' }, running ? t('running') : t('run')),
-            ]),
-            h('button', {
-              key: 'clear',
-              className: 'ghost',
-              onClick: () => { setRunResult(null); setRunError(''); },
-            }, t('clear')),
-          ]),
-          runError ? h('div', { key: 'runerr', className: 'dsh-remote__banner error' }, runError) : null,
-          output,
-        ]),
       ]);
     }
 

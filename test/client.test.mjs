@@ -104,8 +104,13 @@ test('renders the sidebar page with explicit server configuration', () => {
     jumpPassword: '', jumpPrivateKeyPath: '', jumpPassphrase: '',
     readyTimeoutMs: '', keepaliveIntervalMs: '', maxOutputBytes: '',
   };
+  // Order mirrors the component's useState calls: servers, file, warnings,
+  // loading, loadError, editing, saveError, saving, tests, terminalId,
+  // terminalLive, terminalBusy, terminalError, terminalEvents, terminalInput,
+  // terminalFilter, showJson, copied. `terminalId` selects the expanded card.
   const state = [
-    [sample], '/tmp/servers.json', [], false, '', draft, '', false, {}, 'prod', '', false, '', null, true, false,
+    [sample], '/tmp/servers.json', [], false, '', draft, '', false, {},
+    'prod', true, false, '', [], '', 'all', true, false,
   ];
   const h = (type, props, ...children) => {
     const node = { type, props, children };
@@ -162,6 +167,12 @@ test('renders the sidebar page with explicit server configuration', () => {
   assert.ok(nodes.some((node) => node.type === 'details'));
   assert.ok(nodes.some((node) => node.type === 'button' && node.children[0] === 'save'), 'renders the explicit editor');
   assert.ok(nodes.some((node) => node.type === 'input' && node.props?.type === 'checkbox'));
+  assert.ok(nodes.some((node) => node.props?.className === 'dsh-remote__terminal'), 'renders the terminal panel');
+  assert.ok(
+    nodes.some((node) => node.type === 'input' && node.props?.placeholder === 'terminalPlaceholder'),
+    'renders the terminal input row',
+  );
+  assert.ok(!nodes.some((node) => node.children?.[0] === 'commandPlaceholder'), 'the old quick-command panel is gone');
   // Render the sidebar wrapper too: it must mount the same section.
   const page = main({ t: (key) => key });
   assert.equal(page.type, 'div');

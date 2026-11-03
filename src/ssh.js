@@ -27,6 +27,11 @@ const MAX_TIMEOUT_MS = 600000;
 const DEFAULT_MAX_BYTES = 262144;
 const MAX_READ_BYTES = 4 * 1024 * 1024;
 
+/** Terminal geometry and scrollback limits for the interactive shell panel. */
+const SHELL_HISTORY_CHARS = 64 * 1024;
+const SHELL_MAX_COLS = 500;
+const SHELL_MAX_ROWS = 200;
+
 /** @param {unknown} value @param {string} field @returns {number} */
 function positiveInteger(value, field, { min = 1, max = MAX_TIMEOUT_MS, fallback } = {}) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -157,6 +162,181 @@ function endpointConfig(endpoint, label) {
 }
 
 /**
+ * One persistent interactive shell on a server. The stream stays open so state
+ * (`cd`, exported variables, foreground jobs) survives between commands, which
+ * is what the terminal panel needs and what a plain `exec` cannot offer.
+ */
+class ShellSession {
+  /**
+   * @param {{
+   *   serverId: string,
+   *   label: string,
+   *   client: import('ssh2').Client,
+   *   stream: import('ssh2').ClientChannel,
+   *   release: () => void,
+   *   cols: number,
+   *   rows: number,
+   *   onOutput?: (event: Record<string, unknown>) => void,
+   *   onClose?: (event: Record<string, unknown>) => void,
+   * }} options
+   */
+  constructor(options) {
+    this.serverId = options.serverId;
+    this.label = options.label;
+    this.client = options.client;
+    this.stream = options.stream;
+    this.cols = options.cols;
+    this.rows = options.rows;
+    this.openedAt = Date.now();
+    /** @type {string} */
+    this.buffer = '';
+    this.truncated = false;
+    this.bytes = 0;
+    this.closed = false;
+    this.exitCode = undefined;
+    this.release = options.release;
+    this.onOutput = options.onOutput;
+    this.onClose = options.onClose;
+
+    this.stream.on('data', (chunk) => this.consume(chunk, 'stdout'));
+    this.stream.stderr?.on('data', (chunk) => this.consume(chunk, 'stderr'));
+    this.stream.on('exit', (code) => { this.exitCode = typeof code === 'number' ? code : undefined; });
+    this.stream.on('close', () => this.settle('closed'));
+    this.stream.on('error', (error) => this.settle('error', error));
+  }
+
+  /** @param {unknown} chunk @param {'stdout' | 'stderr'} streamName */
+  consume(chunk, streamName) {
+    const text = stripAnsi(Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk));
+    if (text === '') return;
+    this.bytes += Buffer.byteLength(text, 'utf8');
+    this.buffer += text;
+    if (this.buffer.length > SHELL_HISTORY_CHARS) {
+      this.buffer = this.buffer.slice(this.buffer.length - SHELL_HISTORY_CHARS);
+      this.truncated = true;
+    }
+    try {
+      this.onOutput?.({ id: this.serverId, chunk: text, stream: streamName });
+    } catch {
+      // ignore
+    }
+  }
+
+  /** @param {'closed' | 'error'} reason @param {unknown} [error] */
+  settle(reason, error) {
+    if (this.closed) return;
+    this.closed = true;
+    try {
+      this.release();
+    } catch {
+      // ignore
+    }
+    try {
+      this.onClose?.({ id: this.serverId, reason, error: error ? errorText(error) : undefined, exitCode: this.exitCode });
+    } catch {
+      // ignore
+    }
+  }
+
+  /** @param {string} data */
+  write(data) {
+    if (this.closed) return false;
+    try {
+      this.stream.write(data);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** @param {string} signalName */
+  signal(signalName) {
+    if (this.closed) return false;
+    try {
+      this.stream.signal(signalName);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** @param {number} cols @param {number} rows */
+  resize(cols, rows) {
+    if (this.closed) return false;
+    const nextCols = clampInteger(cols, 1, SHELL_MAX_COLS, this.cols);
+    const nextRows = clampInteger(rows, 1, SHELL_MAX_ROWS, this.rows);
+    if (nextCols === this.cols && nextRows === this.rows) return true;
+    this.cols = nextCols;
+    this.rows = nextRows;
+    try {
+      this.stream.setWindow(nextRows, nextCols, 0, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  close() {
+    if (this.closed) return;
+    try {
+      this.stream.end();
+    } catch {
+      // ignore
+    }
+    try {
+      this.stream.close();
+    } catch {
+      // ignore
+    }
+    this.settle('closed');
+  }
+
+  snapshot() {
+    return {
+      id: this.serverId,
+      label: this.label,
+      open: !this.closed,
+      cols: this.cols,
+      rows: this.rows,
+      openedAt: this.openedAt,
+      bytes: this.bytes,
+      truncated: this.truncated,
+      exitCode: this.exitCode,
+    };
+  }
+}
+
+/**
+ * @param {unknown} value @param {number} min @param {number} max @param {number} fallback
+ * @returns {number}
+ */
+function clampInteger(value, min, max, fallback) {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+/**
+ * Drop ANSI/VT control sequences so the panel shows readable text: a browser
+ * <pre> cannot interpret SGR colours, and raw escapes only add noise.
+ * @param {string} text
+ * @returns {string}
+ */
+function stripAnsi(text) {
+  return text
+    // eslint-disable-next-line no-control-regex
+    .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/\u001b[P^_][^\u001b]*(?:\u001b\\)/g, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/\u001b[@-_]/g, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
+}
+
+/**
  * Connection pool + command/SFTP operations.
  */
 export class SshManager {
@@ -170,6 +350,36 @@ export class SshManager {
     /** @type {Map<string, { client: import('ssh2').Client, jump?: import('ssh2').Client, signature: string, active: number, timer?: NodeJS.Timeout }>} */
     this.pool = new Map();
     this.closed = false;
+    /** @type {Set<(serverId: string, event: Record<string, unknown>) => void>} */
+    this.activityListeners = new Set();
+    this.execSeq = 0;
+    /** @type {Map<string, ShellSession>} */
+    this.shells = new Map();
+  }
+
+  /**
+   * Observe every command this manager runs, so a UI can mirror it. The
+   * listener receives `agent-start` / `agent-data` / `agent-end` events keyed by
+   * an execution id; a throwing listener never breaks the command.
+   * @param {(serverId: string, event: Record<string, unknown>) => void} listener
+   * @returns {() => void}
+   */
+  onActivity(listener) {
+    this.activityListeners.add(listener);
+    return () => {
+      this.activityListeners.delete(listener);
+    };
+  }
+
+  /** @param {string} serverId @param {Record<string, unknown>} event */
+  emitActivity(serverId, event) {
+    for (const listener of this.activityListeners) {
+      try {
+        listener(serverId, event);
+      } catch {
+        // A display listener must never fail a command.
+      }
+    }
   }
 
   /**
@@ -291,7 +501,123 @@ export class SshManager {
 
   closeAll() {
     this.closed = true;
+    for (const shell of this.shells.values()) shell.close();
+    this.shells.clear();
     for (const id of [...this.pool.keys()]) this.drop(id);
+  }
+
+  /** Every open interactive shell, as plain snapshots. */
+  listShells() {
+    return [...this.shells.values()].map((shell) => shell.snapshot());
+  }
+
+  /**
+   * Open (or reuse) the persistent shell of one server.
+   * @param {import('./store.js').ServerConfig} server
+   * @param {{ cols?: number, rows?: number }} [options]
+   */
+  async openShell(server, options = {}) {
+    const existing = this.shells.get(server.id);
+    if (existing && !existing.closed) {
+      existing.resize(options.cols, options.rows);
+      return existing.snapshot();
+    }
+    if (this.closed) throw new RemoteError('插件正在卸载，无法打开终端会话', { code: 'closed' });
+    const cols = clampInteger(options.cols, 1, SHELL_MAX_COLS, 120);
+    const rows = clampInteger(options.rows, 1, SHELL_MAX_ROWS, 32);
+    const { client, release } = await this.acquire(server);
+    const stream = await new Promise((resolve, reject) => {
+      try {
+        client.shell(
+          /** @type {any} */ ({ term: 'xterm-256color', cols, rows }),
+          (error, channel) => {
+            if (error) {
+              reject(new RemoteError(`无法打开终端会话：${connectionErrorText(error, server)}`, {
+                code: 'shell-failed',
+                cause: error,
+              }));
+              return;
+            }
+            resolve(channel);
+          },
+        );
+      } catch (error) {
+        reject(new RemoteError(`无法打开终端会话：${errorText(error)}`, { code: 'shell-failed', cause: error }));
+      }
+    }).catch((error) => {
+      release();
+      throw error;
+    });
+    const session = new ShellSession({
+      serverId: server.id,
+      label: server.name ?? server.id,
+      client,
+      stream,
+      release,
+      cols,
+      rows,
+      onOutput: (event) => this.emitActivity(server.id, { type: 'shell-data', ...event }),
+      onClose: (event) => {
+        if (this.shells.get(server.id) === session) this.shells.delete(server.id);
+        this.emitActivity(server.id, { type: 'shell-close', ...event });
+      },
+    });
+    this.shells.set(server.id, session);
+    this.emitActivity(server.id, { type: 'shell-open', id: server.id, cols, rows });
+    return session.snapshot();
+  }
+
+  /**
+   * Type into a shell, exactly like pressing keys in a terminal.
+   * @param {import('./store.js').ServerConfig} server
+   * @param {string} data
+   */
+  async writeShell(server, data) {
+    const shell = this.shells.get(server.id);
+    if (!shell || shell.closed) {
+      throw new RemoteError('终端会话未打开；先打开终端', { code: 'shell-not-open' });
+    }
+    if (typeof data !== 'string' || data === '') {
+      throw new RemoteError('data 不能为空', { code: 'invalid-field', field: 'data' });
+    }
+    if (!shell.write(data)) throw new RemoteError('写入终端失败', { code: 'shell-write-failed' });
+    return { id: server.id, bytes: Buffer.byteLength(data, 'utf8') };
+  }
+
+  /**
+   * Send a POSIX signal to the shell's foreground job (Ctrl+C = `INT`).
+   * @param {import('./store.js').ServerConfig} server
+   * @param {string} [signalName]
+   */
+  async signalShell(server, signalName = 'INT') {
+    const shell = this.shells.get(server.id);
+    if (!shell || shell.closed) {
+      throw new RemoteError('终端会话未打开；先打开终端', { code: 'shell-not-open' });
+    }
+    if (!shell.signal(signalName)) throw new RemoteError(`发送信号 ${signalName} 失败`, { code: 'shell-signal-failed' });
+    return { id: server.id, signal: signalName };
+  }
+
+  /**
+   * @param {import('./store.js').ServerConfig} server
+   * @param {{ cols?: number, rows?: number }} options
+   */
+  async resizeShell(server, { cols, rows }) {
+    const shell = this.shells.get(server.id);
+    if (!shell || shell.closed) {
+      throw new RemoteError('终端会话未打开；先打开终端', { code: 'shell-not-open' });
+    }
+    shell.resize(cols, rows);
+    return shell.snapshot();
+  }
+
+  /** @param {import('./store.js').ServerConfig} server */
+  async closeShell(server) {
+    const shell = this.shells.get(server.id);
+    if (!shell) return { id: server.id, closed: false };
+    shell.close();
+    this.shells.delete(server.id);
+    return { id: server.id, closed: true };
   }
 
   /**
@@ -357,6 +683,18 @@ export class SshManager {
     });
     const { client, release } = await this.acquire(server);
     const startedAt = Date.now();
+    const execId = `exec-${++this.execSeq}`;
+    // Mirror this command into the terminal panel before anything runs, so a
+    // user watching the panel sees the AI working in real time.
+    this.emitActivity(server.id, {
+      type: 'agent-start',
+      id: execId,
+      server: server.id,
+      command: options.command,
+      workdir,
+      tty: options.tty === true,
+      sudo: options.sudo === true,
+    });
     return new Promise((resolve, reject) => {
       let settled = false;
       let timedOut = false;
@@ -380,6 +718,16 @@ export class SshManager {
         release();
         if (timer) clearTimeout(timer);
         if (abortListener && options.signal) options.signal.removeEventListener('abort', abortListener);
+        this.emitActivity(server.id, {
+          type: 'agent-end',
+          id: execId,
+          server: server.id,
+          exitCode: typeof exitCode === 'number' ? exitCode : -1,
+          timedOut,
+          cancelled,
+          durationMs: Date.now() - startedAt,
+          error: error ? errorText(error) : undefined,
+        });
         if (error) {
           reject(error);
           return;
@@ -442,11 +790,25 @@ export class SshManager {
           const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
           outBytes += buffer.length;
           if (outBytes <= maxBytes) out.push(buffer);
+          this.emitActivity(server.id, {
+            type: 'agent-data',
+            id: execId,
+            server: server.id,
+            stream: 'stdout',
+            chunk: stripAnsi(buffer.toString('utf8')),
+          });
         });
         channel.stderr.on('data', (chunk) => {
           const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
           errBytes += buffer.length;
           if (errBytes <= maxBytes) err.push(buffer);
+          this.emitActivity(server.id, {
+            type: 'agent-data',
+            id: execId,
+            server: server.id,
+            stream: 'stderr',
+            chunk: stripAnsi(buffer.toString('utf8')),
+          });
         });
         channel.on('exit', (code, signal) => {
           exitCode = code;

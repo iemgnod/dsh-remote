@@ -1,6 +1,6 @@
 # dsh-remote
 
-远程服务器管理插件：在 DSH 里保存 SSH 服务器配置，让模型通过 `remote_*` 工具连接服务器执行命令、传输文件；同时在「设置 → 远程服务器」里提供可视化配置页和快速命令面板。
+远程服务器管理插件：在 DSH 里保存 SSH 服务器配置，让模型通过 `remote_*` 工具连接服务器执行命令、传输文件；同时在「设置 → 远程服务器」里提供可视化配置页和交互式终端面板。
 
 ## 功能
 
@@ -8,8 +8,10 @@
 - **连接池**：按服务器复用 SSH 连接，配置变更或连接断开时自动重建；空闲 60 秒回收。
 - **命令执行**：非交互执行，支持工作目录、环境变量、`sudo`、登录 shell、TTY、标准输入和超时。
 - **文件传输**：SFTP 上传、下载、读文本、写文本、列目录、查看元数据。
-- **侧边栏入口**：左侧边栏新增「远程服务器」页面，和设置页共用同一套配置与命令面板；不打开设置也能日常使用。
-- **网页设置页**：新增 / 编辑 / 删除服务器，测试连接，直接跑命令并查看 stdout / stderr / 退出码。
+- **交互式终端**：每台服务器一条常驻 SSH shell，`cd` 与变量在命令之间保留；面板实时显示模型 `remote_exec` 执行的命令与输出，也可以直接输入命令回车执行、用 Ctrl+C 中断、清空输出。终端事件按服务器记录在宿主侧，页面轮询增量渲染。
+- **侧边栏入口**：左侧边栏新增「远程服务器」页面，和设置页共用同一套配置与终端面板；不打开设置也能日常使用。
+- **网页设置页**：新增 / 编辑 / 删除服务器，测试连接，在交互式终端里查看输出与退出码。
+
 - **显式配置**：页面顶部展示配置文件路径，可复制路径、查看脱敏后的 JSON；每台服务器都有「配置详情」，逐项列出主机、端口、认证、私钥路径、工作目录、标签、超时、保活、输出上限、跳板机和时间戳。
 - **安全**：配置文件权限 0600；列表接口不回传密码；支持 `env:NAME` / `${NAME}` 引用环境变量，避免密文落盘；HTTP 接口要求同源并经过 DSH 宿主的请求门禁。
 
@@ -119,7 +121,7 @@ git clone https://github.com/iemgnod/dsh-remote.git
 npm pack --ignore-scripts
 
 # 2. 安装到 desktop profile
-& "D:\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add file:D:\path\to\dsh-remote-0.1.0.tgz
+& "D:\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add file:D:\path\to\dsh-remote-0.3.0.tgz
 ```
 
 安装后把包名加入 profile 的 `package.json` → `dsh.profile.bundles`，或在插件管理页启用；没有 HMR 时需要重启 DSH。
@@ -134,17 +136,15 @@ npm pack --ignore-scripts
 ## 开发与测试
 
 ```bash
-node test/store.test.mjs
-node test/ssh.test.mjs
-node test/command.test.mjs
-node test/routes.test.mjs
-node test/tools.test.mjs
+node test/run.mjs
 ```
 
-测试里的 SSH 服务器在进程内启动（`test/ssh-server.mjs`），覆盖密码认证、命令执行、超时、SFTP 与跳板机转发。由于 DSH 的 Windows 沙箱不允许管道式 stdio，测试服务器使用一个最小 POSIX 解释器而不是真正 spawn bash。
+测试里的 SSH 服务器在进程内启动（`test/ssh-server.mjs`），覆盖密码认证、命令执行、超时、SFTP、跳板机转发与持久 shell 会话（含 Ctrl+C 中断）。由于 DSH 的 Windows 沙箱不允许管道式 stdio，测试服务器使用一个最小 POSIX 解释器而不是真正 spawn bash。
 
 ## 已知限制
 
-- 命令执行面向 POSIX（Linux / macOS）服务器；Windows OpenSSH 的 `cmd`/PowerShell 默认 shell 不支持 `cd --` / `export` 包装。
-- 暂不支持交互式终端会话、端口转发、SFTP 递归目录传输。
+- 命令执行面向 POSIX（Linux / macOS）服务器；Windows OpenSSH 的 `cmd`/PowerShell 默认 shell 不支持 `cd --` / `export` 包装。交互式终端依赖远端提供 `shell` 会话，同样面向 POSIX。
+- 交互式终端是「行模式」：页面按行发送命令并显示去色后的文本输出，不是完整 VT100 仿真（全屏程序如 `vim`、`htop` 无法正确显示）。
+- 终端事件日志有意有损：每台服务器保留最近 600 条事件，单条输出截断到 16 KB。
+- 暂不支持端口转发、SFTP 递归目录传输。
 - 连接池只在插件生命周期内有效；DSH 重启后需要重新连接。

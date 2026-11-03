@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import ssh2 from 'ssh2';
-import { runScript } from './mini-shell.mjs';
+import { runScript, posixUnquote } from './mini-shell.mjs';
 
 const { Server, utils } = ssh2;
 const { OPEN_MODE, STATUS_CODE } = utils.sftp;
@@ -60,6 +60,54 @@ export async function startSshServer(options) {
               stream.exit(1);
               stream.end();
             });
+        });
+        session.on('shell', (acceptShell) => {
+          const stream = acceptShell();
+          const state = { cwd: rootDir, env: { ...process.env }, closed: false, cancelled: false };
+          let pending = '';
+          let queue = Promise.resolve();
+          const flush = () => {
+            while (pending.length > 0) {
+              const breakAt = pending.search(/\r\n|\r|\n/);
+              if (breakAt < 0) return;
+              const line = pending.slice(0, breakAt);
+              pending = pending.slice(breakAt).replace(/^(\r\n|\r|\n)/, '');
+              if (line.trim().length > 0) enqueue(line);
+            }
+          };
+          const enqueue = (line) => {
+            queue = queue.then(async () => {
+              if (state.closed) return;
+              state.cancelled = false;
+              const result = await runScript(line, {
+                cwd: state.cwd,
+                env: state.env,
+                username,
+                cancelled: () => state.cancelled || state.closed,
+              });
+              state.cwd = result.cwd;
+              if (state.closed) return;
+              if (result.stdout.length > 0) stream.write(result.stdout);
+              if (result.stderr.length > 0) stream.stderr.write(result.stderr);
+              if (/^\s*exit(?:\s+\d+)?\s*$/.test(line)) {
+                stream.exit(result.code);
+                stream.end();
+                state.closed = true;
+              }
+            });
+          };
+          stream.on('data', (chunk) => {
+            pending += chunk.toString('utf8');
+            flush();
+          });
+          stream.on('close', () => {
+            state.closed = true;
+          });
+          session.on('signal', (acceptSignal, _rejectSignal, info) => {
+            if (info?.name === 'INT') state.cancelled = true;
+            acceptSignal?.();
+          });
+          session.on('window-change', (acceptChange) => acceptChange?.());
         });
         session.on('sftp', (acceptSftp) => {
           handleSftp(acceptSftp(), rootDir);
